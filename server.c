@@ -20,16 +20,23 @@ void error(char *msg)
     exit(1);
 }
 
+/* The get_file_type function is a function that extracts the file extension from the URL received as input and returns it.
+ * - param: url: Pointer to a string representing the URL of the requested file.
+ * - return: Returns a pointer to a string representing the extension of the file. If not supported, NULL is returned.
+ *
+ * This function currently supports JPEG, PNG, GIF, PDF and MP3 file extensions.
+ */
+
 char * get_file_type(char * url){
 
-    size_t url_len = strlen(url);
-    for (int i = url_len - 1; i >= 0; i--) {
+    size_t url_len = strlen(url); // Save the length of the entered URL. 
+    for (int i = url_len - 1; i >= 0; i--) { // Check the URL from behind.
         if (url[i] == '.') {
-            // '.' 이후의 문자열을 추출하여 파일 확장자로 설정
+            //  Extract the string after the character '.' and set it as the file extension
             const char* extension = &url[i + 1];
 
-            // 추출된 확장자가 이미지 파일 확장자인지 확인
-            if (strcasecmp(extension, "jpg") == 0) {
+            // Check what file extension the extracted extension is.
+            if (strcasecmp(extension, "jpeg") == 0) {
                 return "image/jpeg";
             } else if (strcasecmp(extension, "png") == 0) {
                 return "image/png";
@@ -39,76 +46,78 @@ char * get_file_type(char * url){
                 return "application/pdf";
             } else if (strcasecmp(extension, "mp3") == 0) {
                 return "audio/mpeg";
-            } else {
-                return NULL; // 지원하지 않는 확장자인 경우
+            } else if (strcasecmp(extension, "html") == 0){
+                return "text/html";
+            } 
+            else {
+                return NULL; // Return NULL if the extension is not supported
             }
         }
     }
-    return NULL;
+    return NULL; // If there is no extension, NULL is returned. 
 }
 
 int main(int argc, char *argv[]){
 
-    int socketfd, new_socketfd; //descriptors return from socket and accept system calls
+    int socketfd, client_socket; //descriptors return from socket and accept system calls
     int portno; // port number
     int n;
     socklen_t clilen;
 
-    char buffer[MAX_BUFFER_SIZE];
+    char buffer[MAX_BUFFER_SIZE]; 
     char *token, *url; 
     
-    char file_path[256];
-    char response[1024]; 
-    
+    char file_path[256]; // Create a string to store the requested file path
+    char response[1024];  // Create a string to store the response message
      
     /*sockaddr_in: Structure Containing an Internet Address*/
     struct sockaddr_in serv_addr, cli_addr;
 
-     if (argc < 2) // 만약 포트 번호 입력 하지 않았다면, 에러 발생
+     if (argc < 2) // If the port number is not entered, an error occurs
      {
         fprintf(stderr,"ERROR, no port provided\n");
         exit(1);
      }
 
-    socketfd = socket(AF_INET, SOCK_STREAM, 0); // 소켓 생성
+    socketfd = socket(AF_INET, SOCK_STREAM, 0); // create socket
 
-    if (socketfd < 0) // 만약 소켓이 정상적으로 생성 되지 않았다면, 에러 발생
+    if (socketfd < 0) // If the socket was not created properly, an error occurs
         error("ERROR opening socket");
 
-    memset(&serv_addr, 0, sizeof(serv_addr)); // serv_addr의 메모리를 0으로 초기화 한다. 
+    memset(&serv_addr, 0, sizeof(serv_addr)); // Initialize the memory of serv_addr to 0.
 
     portno = atoi(argv[1]); //atoi converts from String to Integer  
-    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_family = AF_INET; 
     serv_addr.sin_addr.s_addr = INADDR_ANY;
     serv_addr.sin_port = htons(portno);
 
-    if (bind(socketfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) // 소켓 바인딩 -> 소켓에 IP 정보와 포트 번호 부여
+    if (bind(socketfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) // Socket binding -> Give IP information and port number to the socket
         error("ERROR on binding");
 
     listen(socketfd, 5); // Listen for socket connections. Backlog queue (connections to wait) is 5
 
     printf("Server: Waiting for client's connection on port %d...\n", portno);
 
-    while(1){
+    while(1){ // Continue receiving requests from clients in an infinite loop
 
-        clilen = sizeof(cli_addr);
+        clilen = sizeof(cli_addr); // Set the client's address length
 
-        new_socketfd = accept(socketfd, (struct sockaddr *)&cli_addr, &clilen);
-        if (new_socketfd < 0)
+        client_socket = accept(socketfd, (struct sockaddr *)&cli_addr, &clilen); // Receive the client's request and create a socket
+        if (client_socket < 0) // If the socket was not created successfully, an error occurs
             error("ERROR on accept");
 
-        memset(buffer, 0, sizeof(buffer));
+        memset(buffer, 0, sizeof(buffer)); // initialize buffer
 
-        n = read(new_socketfd, buffer, 2048);
-        if (n < 0) error("ERROR reading from socket");  
-        //printf("HTTP Request is %s  \n",buffer);
+        n = read(client_socket, buffer, 2048); // Read data from client.
+        if (n < 0) error("ERROR reading from socket");  // If data is not entered correctly, an error occurs
+        printf("HTTP Request is %s  \n",buffer); // Request message output
 
-        // HTTP 요청에서 첫 번째 라인 추출
+        // Extract first line from HTTP request
         token = strtok(buffer, "\n");
 
-        // 첫 번째 라인에서 URL 추출
+        // Extract URL from first line
         if (token != NULL) {
-        // 두 번째 토큰이 URL
+        // second token is URL
         token = strtok(token, " ");
         token = strtok(NULL, " ");
         if (token != NULL) {
@@ -116,37 +125,66 @@ int main(int argc, char *argv[]){
             }
         }
 
-        memset(file_path, 0, sizeof(file_path));
-        memset(response, 0, sizeof(response));
+        memset(file_path, 0, sizeof(file_path)); // file_path memory area initialization
+        memset(response, 0, sizeof(response)); // Initialize response memory area
 
-        sprintf(file_path, "./files%s", url);
+        sprintf(file_path, "./files%s", url); // Set the file_path corresponding to the requested URL
 
-        //printf("Requested file's Path : %s\n", file_path);
-        // 파일 있는지 확인 후 실행. 만약 파일 없으면, 404 던지도록. 
-        char *file_name = url;
-        if (access(file_name, F_OK) != -1) {
+        char *file_name = url; // set file name
 
-        }
-        int fd = open(file_path, O_RDONLY);
-
-        if (fd < 0){ // 여기를 500 에러로 바꾸기
+        // If the file corresponding to the input file name does not exist, a 404 error response is generated.
+        if (access(file_path, F_OK) == -1) {
             sprintf(response, "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n");
             printf("Response message : \n%s", response);
-            send(new_socketfd, response, strlen(response), 0);
-        } 
-        else{
-            // 헤더 요소들 더 추가하기. 
-            sprintf(response,"HTTP/1.1 200 OK\r\nContent-Type:%s\r\n\r\n", get_file_type(file_path));
-            printf("Response message : \n%s", response);
-            send(new_socketfd, response, strlen(response), 0);
-            char file_buffer[MAX_BUFFER_SIZE];
-            while(read(fd, file_buffer, sizeof(file_buffer)) != -1){
-                write(new_socketfd, file_buffer, sizeof(file_buffer));
-            }
-            close(fd);
+            send(client_socket, response, strlen(response), 0);
         }
-        close(new_socketfd);
+        // If the file exists
+        else{
+            int fd = open(file_path, O_RDONLY); // Open the file read-only.
+
+        if (fd < 0){ // If the file cannot be opened properly, a 500 error response is generated.
+            sprintf(response, "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n");
+            printf("Response message : \n%s", response);
+            send(client_socket, response, strlen(response), 0);
+        } 
+        else{ // If the file is opened normally
+            
+            time_t raw_time; // Get current date and time
+            struct tm *info;
+            time(&raw_time);
+            info = localtime(&raw_time);
+
+            // Remove newline characters from the string returned from the asctime() function
+            char* date_str = asctime(info);
+            date_str[strcspn(date_str, "\n")] = '\0';
+
+            // Create response message
+            sprintf(response, "HTTP/1.1 200 OK\r\n"
+                      "Content-Type: %s\r\n"
+                      "Connection: close\r\n"
+                      "Date: %s\r\n\r\n",
+            get_file_type(file_path), date_str);
+            printf("Response message : \n%s", response);
+            send(client_socket, response, strlen(response), 0); 
+
+            // Allocate memory for file_buffer dynamically
+            off_t file_size = lseek(fd, 0, SEEK_END);
+            lseek(fd, 0, SEEK_SET);
+            
+            char *file_buffer = (char *)malloc(file_size); 
+            ssize_t bytes_read;
+            while ((bytes_read = read(fd, file_buffer, file_size)) > 0) {
+                write(client_socket, file_buffer, bytes_read);
+            }
+            // Free dynamically allocated memory
+            free(file_buffer);
+
+            close(fd); // close file
+        }
+            
+        } close(client_socket); // Close client socket
+        
     }
-    close(socketfd);
+    close(socketfd); // Close server socket
 
 }
